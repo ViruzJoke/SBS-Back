@@ -1,11 +1,12 @@
 // /api/quote.js
 
 import fetch from 'node-fetch';
+import { sql } from '@vercel/postgres'; // [NEW] Import the Vercel Postgres client
 
 const ALLOWED_ORIGIN = 'https://viruzjoke.github.io';
 
 export default async function handler(req, res) {
-    // Set CORS headers
+    // CORS headers and method checks remain the same
     res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -13,25 +14,25 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
-
     if (req.method !== 'POST') {
         res.setHeader('Allow', ['POST']);
         return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
 
-    // --- [FIX] Simplified to a 1-step process: Direct API call with Basic Auth ---
-
     const username = process.env.DHL_USERNAME;
     const password = process.env.DHL_PASSWORD;
     const ratesEndpoint = process.env.DHL_API_ENDPOINT_RATES;
-
-    if (!username || !password || !ratesEndpoint) {
-        return res.status(500).json({ error: 'API environment variables are not configured correctly. Please check DHL_USERNAME, DHL_PASSWORD, and DHL_API_ENDPOINT_RATES.' });
-    }
+    
+    // Get form data early to use in logging
+    const formData = req.body;
+    let dhlApiRequestPayload;
 
     try {
-        const formData = req.body;
-        const dhlApiRequestPayload = {
+        if (!username || !password || !ratesEndpoint) {
+            throw new Error('API environment variables are not configured correctly.');
+        }
+
+        dhlApiRequestPayload = {
             customerDetails: {
                 shipperDetails: { postalCode: formData.originPostalCode, cityName: formData.originCity, countryCode: formData.originCountry },
                 receiverDetails: { postalCode: formData.destinationPostalCode, cityName: formData.destinationCity, countryCode: formData.destinationCountry }
@@ -47,30 +48,41 @@ export default async function handler(req, res) {
             accounts: [{ typeCode: "shipper", number: "CASHTHBKK" }]
         };
         
-        // Create the Basic Authentication header directly from credentials
         const auth = 'Basic ' + Buffer.from(username + ':' + password).toString('base64');
         
-        // Make the POST request directly to the rates endpoint with the Basic Auth header
         const quoteResponse = await fetch(ratesEndpoint, {
             method: 'POST',
-            headers: {
-                'Authorization': auth, // Using Basic Auth here
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
             body: JSON.stringify(dhlApiRequestPayload)
         });
 
         const responseBodyText = await quoteResponse.text();
+        const quoteData = JSON.parse(responseBodyText);
 
         if (!quoteResponse.ok) {
             console.error('DHL Rates API Error:', responseBodyText);
-            return res.status(quoteResponse.status).json({ error: `DHL API returned an error: ${quoteResponse.statusText}`, details: responseBodyText });
+            // [NEW] Log error to the database
+            await sql`
+                INSERT INTO api_logs (log_type, request_data, response_data, error_data)
+                VALUES ('quote_error', ${JSON.stringify(dhlApiRequestPayload)}, ${JSON.stringify(quoteData)}, ${quoteData.detail || responseBodyText});
+            `;
+            return res.status(quoteResponse.status).json({ error: `DHL API Error`, details: quoteData.detail || responseBodyText });
         }
         
-        // Send back the parsed JSON response
-        res.status(200).json(JSON.parse(responseBodyText));
+        // [NEW] Log success to the database
+        await sql`
+            INSERT INTO api_logs (log_type, request_data, response_data)
+            VALUES ('quote_success', ${JSON.stringify(dhlApiRequestPayload)}, ${JSON.stringify(quoteData)});
+        `;
+
+        res.status(200).json(quoteData);
 
     } catch (error) {
+        // [NEW] Log general errors to the database
+        await sql`
+            INSERT INTO api_logs (log_type, request_data, error_data)
+            VALUES ('quote_error', ${JSON.stringify(dhlApiRequestPayload || formData)}, ${error.message});
+        `;
         console.error('Error processing quote request:', error);
         return res.status(500).json({ error: 'An internal server error occurred.', details: error.message });
     }
