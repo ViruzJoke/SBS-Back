@@ -1,16 +1,18 @@
 // /api/quote.js
 
-// ใช้ import แทน require สำหรับ ES Modules
 import fetch from 'node-fetch';
 
-// แก้ไขการ export เป็นแบบมาตรฐาน
+// [IMPORTANT] This is the domain of your frontend.
+// This tells the server to only allow requests from your specific GitHub Pages site.
+const ALLOWED_ORIGIN = 'https://viruzjoke.github.io';
+
 export default async function handler(req, res) {
-    // เพิ่ม Header เพื่อรองรับการทดสอบจากเครื่อง local (CORS)
-    res.setHeader('Access-Control-Allow-Origin', '*'); 
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-    // จัดการกับ OPTIONS request ที่เบราว์เซอร์ส่งมาก่อน POST จริง
+    // Browsers send an OPTIONS request first to check CORS policy
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
@@ -83,7 +85,6 @@ export default async function handler(req, res) {
             return res.status(quoteResponse.status).json({ error: `DHL API returned an error: ${quoteResponse.statusText}`, details: responseBodyText });
         }
         
-        // ส่งกลับเป็น JSON ที่แปลงแล้ว
         res.status(200).json(JSON.parse(responseBodyText));
 
     } catch (error) {
