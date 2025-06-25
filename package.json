@@ -1,12 +1,14 @@
 {
-  "name": "dhl-tracking-backend",
+  "name": "dhl-backup-solution",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "DHL Backup Solution Frontend with Vercel Serverless Functions",
+  "main": "index.html",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "author": "Joker",
   "license": "ISC",
-  "description": ""
+  "dependencies": {
+    "node-fetch": "^2.7.0"
+  }
 }
