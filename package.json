@@ -9,6 +9,7 @@
   "author": "Joker",
   "license": "ISC",
   "dependencies": {
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "@vercel/postgres": "^0.9.0"
   }
 }
