@@ -1,15 +1,17 @@
 {
-  "name": "dhl-backup-solution",
+  "name": "dbs-back",
   "version": "1.0.0",
-  "description": "DHL Backup Solution Frontend with Vercel Serverless Functions",
-  "main": "index.html",
+  "description": "Backend API for DHL Backup Solution",
+  "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [],
   "author": "Joker",
   "license": "ISC",
   "dependencies": {
-    "node-fetch": "^2.7.0",
-    "@vercel/postgres": "^0.9.0"
+    "@vercel/postgres": "^0.9.0",
+    "node-fetch": "^2.7.0"
   }
 }
