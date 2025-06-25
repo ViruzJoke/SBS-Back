@@ -1,19 +1,23 @@
 // /api/quote.js
 
 import fetch from 'node-fetch';
-import { sql } from '@vercel/postgres'; // [NEW] Import the Vercel Postgres client
+import { sql } from '@vercel/postgres';
 
+// [IMPORTANT] This is the domain of your frontend.
+// This tells the server to only allow requests from your specific GitHub Pages site.
 const ALLOWED_ORIGIN = 'https://viruzjoke.github.io';
 
 export default async function handler(req, res) {
-    // CORS headers and method checks remain the same
+    // [FIX] Set CORS headers to allow requests from your frontend
     res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
+    // [FIX] Handle the browser's preflight OPTIONS request
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
+
     if (req.method !== 'POST') {
         res.setHeader('Allow', ['POST']);
         return res.status(405).end(`Method ${req.method} Not Allowed`);
@@ -23,7 +27,6 @@ export default async function handler(req, res) {
     const password = process.env.DHL_PASSWORD;
     const ratesEndpoint = process.env.DHL_API_ENDPOINT_RATES;
     
-    // Get form data early to use in logging
     const formData = req.body;
     let dhlApiRequestPayload;
 
@@ -61,7 +64,6 @@ export default async function handler(req, res) {
 
         if (!quoteResponse.ok) {
             console.error('DHL Rates API Error:', responseBodyText);
-            // [NEW] Log error to the database
             await sql`
                 INSERT INTO api_logs (log_type, request_data, response_data, error_data)
                 VALUES ('quote_error', ${JSON.stringify(dhlApiRequestPayload)}, ${JSON.stringify(quoteData)}, ${quoteData.detail || responseBodyText});
@@ -69,7 +71,6 @@ export default async function handler(req, res) {
             return res.status(quoteResponse.status).json({ error: `DHL API Error`, details: quoteData.detail || responseBodyText });
         }
         
-        // [NEW] Log success to the database
         await sql`
             INSERT INTO api_logs (log_type, request_data, response_data)
             VALUES ('quote_success', ${JSON.stringify(dhlApiRequestPayload)}, ${JSON.stringify(quoteData)});
@@ -78,7 +79,6 @@ export default async function handler(req, res) {
         res.status(200).json(quoteData);
 
     } catch (error) {
-        // [NEW] Log general errors to the database
         await sql`
             INSERT INTO api_logs (log_type, request_data, error_data)
             VALUES ('quote_error', ${JSON.stringify(dhlApiRequestPayload || formData)}, ${error.message});
