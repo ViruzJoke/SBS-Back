@@ -33,7 +33,8 @@ export default async function handler(req, res) {
     const basicAuth = Buffer.from(`${username}:${password}`).toString('base64');
     // ------------------------------------
 
-    const dhlApiUrl = `https://api-eu.dhl.com/track/shipments?trackingNumber=${trackingNumber}`;
+    // --- อัปเดต URL และ Parameter ตามที่ผู้ใช้แจ้ง ---
+    const dhlApiUrl = `https://express.api.dhl.com/mydhlapi/tracking?shipmentTrackingNumber=${trackingNumber}&trackingView=all-checkpoints`;
 
     try {
         const apiResponse = await fetch(dhlApiUrl, {
