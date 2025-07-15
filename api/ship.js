@@ -1,6 +1,6 @@
 // /api/ship.js
 // Vercel Serverless Function for creating a DHL Shipment
-// v4 - Added request data to logs for better tracking
+// v5 - Added account numbers to logs
 
 import fetch from 'node-fetch';
 import { sql } from '@vercel/postgres';
@@ -66,7 +66,6 @@ export default async function handler(req, res) {
             });
         }
 
-        // Handle API errors from DHL
         if (!shipmentResponse.ok) {
             console.error('DHL Shipment API Error:', responseBodyText);
             const errorMessage = shipmentData.detail || JSON.stringify(shipmentData);
@@ -81,11 +80,12 @@ export default async function handler(req, res) {
             return res.status(shipmentResponse.status).json(shipmentData);
         }
         
-        // On success, process and log the data to the new table
+        // On success, process and log the data
         try {
-            // --- [NEW] Extracting data from the request payload ---
+            // --- Extracting data from the request payload ---
             const shipper = dhlApiRequestPayload?.customerDetails?.shipperDetails;
             const receiver = dhlApiRequestPayload?.customerDetails?.receiverDetails;
+            const accounts = dhlApiRequestPayload?.accounts || [];
             
             const shipperName = shipper?.contactInformation?.fullName || null;
             const shipperCompany = shipper?.contactInformation?.companyName || null;
@@ -98,6 +98,11 @@ export default async function handler(req, res) {
             const receiverCountry = receiver?.postalAddress?.countryCode || null;
 
             const requestReference = dhlApiRequestPayload?.customerReferences?.[0]?.value || null;
+            
+            // [NEW] Extract account numbers from the request
+            const shipperAccountNumber = accounts.find(acc => acc.typeCode === 'shipper')?.number || null;
+            const dutyAccountNumber = accounts.find(acc => acc.typeCode === 'duties-taxes')?.number || null;
+
 
             // --- Extracting data from the response payload ---
             const trackingNumber = shipmentData?.shipmentTrackingNumber || null;
@@ -108,7 +113,7 @@ export default async function handler(req, res) {
             const receiptContent = findDocContent('receipt') || findDocContent('shipmentreceipt');
             const invoiceContent = findDocContent('invoice');
 
-            // --- [MODIFIED] Updated SQL INSERT statement with new fields ---
+            // [MODIFIED] Updated SQL INSERT statement with all new fields
             await sql`
                 INSERT INTO shipment_logs (
                     log_type, 
@@ -126,7 +131,9 @@ export default async function handler(req, res) {
                     receiver_company,
                     receiver_phone,
                     receiver_country,
-                    request_reference
+                    request_reference,
+                    shipper_account_number,
+                    duty_account_number
                 )
                 VALUES (
                     'Success', 
@@ -144,7 +151,9 @@ export default async function handler(req, res) {
                     ${receiverCompany},
                     ${receiverPhone},
                     ${receiverCountry},
-                    ${requestReference}
+                    ${requestReference},
+                    ${shipperAccountNumber},
+                    ${dutyAccountNumber}
                 );
             `;
         } catch (dbError) {
