@@ -1,6 +1,6 @@
 // /api/query-logs.js
 // Vercel Serverless Function to query shipment logs from the database.
-// v3 - Added time filter and combined account search
+// v4 - Added phone filter and refactored for clarity
 
 import { sql } from '@vercel/postgres';
 
@@ -16,10 +16,8 @@ export default async function handler(req, res) {
     try {
         const { 
             trackingNumber, shipperName, receiverName, reference, 
-            accountNumber, // [MODIFIED] รับค่า account รวม
-            shipperCountry, receiverCountry, 
-            dateFrom, dateTo,
-            timeFrom, timeTo // [NEW] รับค่าเวลา
+            accountNumber, phone, shipperCountry, receiverCountry, 
+            dateFrom, dateTo, timeFrom, timeTo
         } = req.query;
 
         let query = "SELECT * FROM shipment_logs";
@@ -27,11 +25,18 @@ export default async function handler(req, res) {
         const values = [];
         let valueIndex = 1;
 
-        // --- สร้างเงื่อนไข (WHERE clause) แบบ Dynamic และปลอดภัย ---
-        if (trackingNumber) {
-            conditions.push(`respond_trackingnumber ILIKE $${valueIndex++}`);
-            values.push(`%${trackingNumber.replace(/\*/g, '%')}%`);
-        }
+        const addCondition = (clause, value) => {
+            if (value) {
+                conditions.push(clause.replace('?', `$${valueIndex++}`));
+                values.push(value.includes('%') ? value : `%${value.replace(/\*/g, '%')}%`);
+            }
+        };
+
+        addCondition('respond_trackingnumber ILIKE ?', trackingNumber);
+        addCondition('request_reference ILIKE ?', reference);
+        addCondition('shipper_country ILIKE ?', shipperCountry);
+        addCondition('receiver_country ILIKE ?', receiverCountry);
+
         if (shipperName) {
             conditions.push(`(shipper_name ILIKE $${valueIndex++} OR shipper_company ILIKE $${valueIndex++})`);
             values.push(`%${shipperName.replace(/\*/g, '%')}%`, `%${shipperName.replace(/\*/g, '%')}%`);
@@ -40,30 +45,22 @@ export default async function handler(req, res) {
             conditions.push(`(receiver_name ILIKE $${valueIndex++} OR receiver_company ILIKE $${valueIndex++})`);
             values.push(`%${receiverName.replace(/\*/g, '%')}%`, `%${receiverName.replace(/\*/g, '%')}%`);
         }
-        if (reference) {
-            conditions.push(`request_reference ILIKE $${valueIndex++}`);
-            values.push(`%${reference.replace(/\*/g, '%')}%`);
-        }
-        // [MODIFIED] ค้นหาใน account ทั้งสองฟิลด์
         if (accountNumber) {
             conditions.push(`(shipper_account_number ILIKE $${valueIndex++} OR duty_account_number ILIKE $${valueIndex++})`);
             values.push(`%${accountNumber.replace(/\*/g, '%')}%`, `%${accountNumber.replace(/\*/g, '%')}%`);
         }
-        if (shipperCountry) {
-            conditions.push(`shipper_country ILIKE $${valueIndex++}`);
-            values.push(`%${shipperCountry.replace(/\*/g, '%')}%`);
+        if (phone) {
+            conditions.push(`(shipper_phone ILIKE $${valueIndex++} OR receiver_phone ILIKE $${valueIndex++})`);
+            values.push(`%${phone.replace(/\*/g, '%')}%`, `%${phone.replace(/\*/g, '%')}%`);
         }
-        if (receiverCountry) {
-            conditions.push(`receiver_country ILIKE $${valueIndex++}`);
-            values.push(`%${receiverCountry.replace(/\*/g, '%')}%`);
-        }
+        
         if (dateFrom) {
-            const startDateTime = timeFrom ? `${dateFrom}T${timeFrom}:00.000Z` : `${dateFrom}T00:00:00.000Z`;
+            const startDateTime = timeFrom ? `${dateFrom}T${timeFrom}:00` : `${dateFrom}T00:00:00`;
             conditions.push(`created_at >= $${valueIndex++}`);
             values.push(startDateTime);
         }
         if (dateTo) {
-            const endDateTime = timeTo ? `${dateTo}T${timeTo}:59.999Z` : `${dateTo}T23:59:59.999Z`;
+            const endDateTime = timeTo ? `${dateTo}T${timeTo}:59` : `${dateTo}T23:59:59`;
             conditions.push(`created_at <= $${valueIndex++}`);
             values.push(endDateTime);
         }
