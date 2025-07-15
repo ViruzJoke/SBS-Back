@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "@vercel/postgres": "^0.9.0",
+    "bcrypt": "^6.0.0",
     "node-fetch": "^2.7.0"
   }
 }
