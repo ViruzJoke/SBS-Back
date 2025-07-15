@@ -1,34 +1,25 @@
 // /api/query-logs.js
 // Vercel Serverless Function to query shipment logs from the database.
-// v2 - Added country filters
+// v3 - Added time filter and combined account search
 
 import { sql } from '@vercel/postgres';
 
-// [สำคัญ] เปลี่ยนค่านี้ให้เป็น URL ของหน้า Admin (DHL-Admin) ของคุณ
 const ALLOWED_ORIGIN = 'https://viruzjoke.github.io'; 
 
 export default async function handler(req, res) {
-    // --- CORS Configuration ---
     res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
     
-    // --- Main Logic ---
     try {
         const { 
-            trackingNumber, 
-            shipperName, 
-            receiverName, 
-            reference, 
-            shipperAccount, 
-            shipperCountry, // [NEW] รับค่าประเทศผู้ส่ง
-            receiverCountry, // [NEW] รับค่าประเทศผู้รับ
-            dateFrom, 
-            dateTo 
+            trackingNumber, shipperName, receiverName, reference, 
+            accountNumber, // [MODIFIED] รับค่า account รวม
+            shipperCountry, receiverCountry, 
+            dateFrom, dateTo,
+            timeFrom, timeTo // [NEW] รับค่าเวลา
         } = req.query;
 
         let query = "SELECT * FROM shipment_logs";
@@ -37,8 +28,6 @@ export default async function handler(req, res) {
         let valueIndex = 1;
 
         // --- สร้างเงื่อนไข (WHERE clause) แบบ Dynamic และปลอดภัย ---
-        // การค้นหาด้วย Wildcard (*) จะถูกจัดการโดยการใช้ ILIKE และเครื่องหมาย %
-        // ซึ่ง Frontend ไม่ต้องใส่ * มา แต่ Backend จะจัดการให้เอง
         if (trackingNumber) {
             conditions.push(`respond_trackingnumber ILIKE $${valueIndex++}`);
             values.push(`%${trackingNumber.replace(/\*/g, '%')}%`);
@@ -55,11 +44,11 @@ export default async function handler(req, res) {
             conditions.push(`request_reference ILIKE $${valueIndex++}`);
             values.push(`%${reference.replace(/\*/g, '%')}%`);
         }
-        if (shipperAccount) {
-            conditions.push(`shipper_account_number ILIKE $${valueIndex++}`);
-            values.push(`%${shipperAccount.replace(/\*/g, '%')}%`);
+        // [MODIFIED] ค้นหาใน account ทั้งสองฟิลด์
+        if (accountNumber) {
+            conditions.push(`(shipper_account_number ILIKE $${valueIndex++} OR duty_account_number ILIKE $${valueIndex++})`);
+            values.push(`%${accountNumber.replace(/\*/g, '%')}%`, `%${accountNumber.replace(/\*/g, '%')}%`);
         }
-        // [NEW] เพิ่มเงื่อนไขการค้นหาด้วยประเทศ
         if (shipperCountry) {
             conditions.push(`shipper_country ILIKE $${valueIndex++}`);
             values.push(`%${shipperCountry.replace(/\*/g, '%')}%`);
@@ -69,12 +58,14 @@ export default async function handler(req, res) {
             values.push(`%${receiverCountry.replace(/\*/g, '%')}%`);
         }
         if (dateFrom) {
+            const startDateTime = timeFrom ? `${dateFrom}T${timeFrom}:00.000Z` : `${dateFrom}T00:00:00.000Z`;
             conditions.push(`created_at >= $${valueIndex++}`);
-            values.push(`${dateFrom}T00:00:00.000Z`);
+            values.push(startDateTime);
         }
         if (dateTo) {
+            const endDateTime = timeTo ? `${dateTo}T${timeTo}:59.999Z` : `${dateTo}T23:59:59.999Z`;
             conditions.push(`created_at <= $${valueIndex++}`);
-            values.push(`${dateTo}T23:59:59.999Z`);
+            values.push(endDateTime);
         }
 
         if (conditions.length > 0) {
