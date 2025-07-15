@@ -5,7 +5,7 @@
 import { sql } from '@vercel/postgres';
 
 // [สำคัญ] เปลี่ยนค่านี้ให้เป็น URL ของหน้า Admin (DHL-Admin) ของคุณ
-const ALLOWED_ORIGIN = 'https://viruzjoke.github.io/DHL-Admin'; 
+const ALLOWED_ORIGIN = 'https://viruzjoke.github.io'; 
 
 export default async function handler(req, res) {
     // --- CORS Configuration ---
