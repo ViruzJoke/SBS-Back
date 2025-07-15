@@ -1,5 +1,4 @@
 // /api/query-logs.js
-// Vercel Serverless Function to query shipment logs from the database.
 // v4 - Added phone filter and refactored for clarity
 
 import { sql } from '@vercel/postgres';
@@ -28,7 +27,7 @@ export default async function handler(req, res) {
         const addCondition = (clause, value) => {
             if (value) {
                 conditions.push(clause.replace('?', `$${valueIndex++}`));
-                values.push(value.includes('%') ? value : `%${value.replace(/\*/g, '%')}%`);
+                values.push(`%${value.replace(/\*/g, '%')}%`);
             }
         };
 
@@ -69,7 +68,8 @@ export default async function handler(req, res) {
             query += " WHERE " + conditions.join(" AND ");
         }
 
-        query += " ORDER BY created_at DESC LIMIT 100;";
+        // [MODIFIED] Don't limit results here, let frontend handle pagination
+        query += " ORDER BY created_at DESC;";
 
         const { rows } = await sql.query(query, values);
         
