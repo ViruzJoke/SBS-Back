@@ -1,6 +1,6 @@
 // /api/ship.js
 // Vercel Serverless Function for creating a DHL Shipment
-// v3 - Logging to new shipment_logs table
+// v4 - Added request data to logs for better tracking
 
 import fetch from 'node-fetch';
 import { sql } from '@vercel/postgres';
@@ -51,7 +51,6 @@ export default async function handler(req, res) {
              shipmentData = JSON.parse(responseBodyText);
         } catch(e) {
             console.error('DHL Shipment API Non-JSON Response:', responseBodyText);
-            // Log the non-JSON error to the new table
             try {
                 await sql`
                     INSERT INTO shipment_logs (log_type, respond_warnings)
@@ -71,7 +70,6 @@ export default async function handler(req, res) {
         if (!shipmentResponse.ok) {
             console.error('DHL Shipment API Error:', responseBodyText);
             const errorMessage = shipmentData.detail || JSON.stringify(shipmentData);
-            // Log the error to the new table
             try {
                 await sql`
                     INSERT INTO shipment_logs (log_type, respond_warnings)
@@ -85,17 +83,32 @@ export default async function handler(req, res) {
         
         // On success, process and log the data to the new table
         try {
+            // --- [NEW] Extracting data from the request payload ---
+            const shipper = dhlApiRequestPayload?.customerDetails?.shipperDetails;
+            const receiver = dhlApiRequestPayload?.customerDetails?.receiverDetails;
+            
+            const shipperName = shipper?.contactInformation?.fullName || null;
+            const shipperCompany = shipper?.contactInformation?.companyName || null;
+            const shipperPhone = shipper?.contactInformation?.phone || null;
+            const shipperCountry = shipper?.postalAddress?.countryCode || null;
+            
+            const receiverName = receiver?.contactInformation?.fullName || null;
+            const receiverCompany = receiver?.contactInformation?.companyName || null;
+            const receiverPhone = receiver?.contactInformation?.phone || null;
+            const receiverCountry = receiver?.postalAddress?.countryCode || null;
+
+            const requestReference = dhlApiRequestPayload?.customerReferences?.[0]?.value || null;
+
+            // --- Extracting data from the response payload ---
             const trackingNumber = shipmentData?.shipmentTrackingNumber || null;
             const packageIds = shipmentData?.packages?.map(p => p.trackingNumber).join(',') || null;
             const warnings = shipmentData?.warnings?.join('; ') || null;
-
-            // Helper to find document content by typeCode
             const findDocContent = (type) => shipmentData?.documents?.find(d => d.typeCode.toLowerCase() === type)?.content || null;
-
-            const labelContent = findDocContent('label');
-            const receiptContent = findDocContent('receipt');
+            const labelContent = findDocContent('label') || findDocContent('waybilldoc');
+            const receiptContent = findDocContent('receipt') || findDocContent('shipmentreceipt');
             const invoiceContent = findDocContent('invoice');
 
+            // --- [MODIFIED] Updated SQL INSERT statement with new fields ---
             await sql`
                 INSERT INTO shipment_logs (
                     log_type, 
@@ -104,7 +117,16 @@ export default async function handler(req, res) {
                     respond_label, 
                     respond_receipt, 
                     respond_invoice, 
-                    respond_warnings
+                    respond_warnings,
+                    shipper_name,
+                    shipper_company,
+                    shipper_phone,
+                    shipper_country,
+                    receiver_name,
+                    receiver_company,
+                    receiver_phone,
+                    receiver_country,
+                    request_reference
                 )
                 VALUES (
                     'Success', 
@@ -113,20 +135,25 @@ export default async function handler(req, res) {
                     ${labelContent}, 
                     ${receiptContent}, 
                     ${invoiceContent}, 
-                    ${warnings}
+                    ${warnings},
+                    ${shipperName},
+                    ${shipperCompany},
+                    ${shipperPhone},
+                    ${shipperCountry},
+                    ${receiverName},
+                    ${receiverCompany},
+                    ${receiverPhone},
+                    ${receiverCountry},
+                    ${requestReference}
                 );
             `;
         } catch (dbError) {
-            // If logging fails, just log it to the console and continue.
-            // The user should still get their successful response.
             console.error("Database logging failed for successful shipment:", dbError);
         }
 
-        // Send the successful response back to the frontend
         res.status(200).json(shipmentData);
 
     } catch (error) {
-        // Log any other server-side errors
         try {
             await sql`
                 INSERT INTO shipment_logs (log_type, respond_warnings)
