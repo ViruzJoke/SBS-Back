@@ -1,6 +1,6 @@
 // /api/ship.js
 // Vercel Serverless Function for creating a DHL Shipment
-// v5 - Added account numbers to logs
+// v8 - Log full request details even on failure
 
 import fetch from 'node-fetch';
 import { sql } from '@vercel/postgres';
@@ -28,6 +28,27 @@ export default async function handler(req, res) {
     
     const dhlApiRequestPayload = req.body;
 
+    // [FIX] Extract request data early to ensure it's available for all log types (success or error)
+    const shipper = dhlApiRequestPayload?.customerDetails?.shipperDetails;
+    const receiver = dhlApiRequestPayload?.customerDetails?.receiverDetails;
+    const accounts = dhlApiRequestPayload?.accounts || [];
+    
+    const shipperName = shipper?.contactInformation?.fullName || null;
+    const shipperCompany = shipper?.contactInformation?.companyName || null;
+    const shipperPhone = shipper?.contactInformation?.phone || null;
+    const shipperCountry = shipper?.postalAddress?.countryCode || null;
+    
+    const receiverName = receiver?.contactInformation?.fullName || null;
+    const receiverCompany = receiver?.contactInformation?.companyName || null;
+    const receiverPhone = receiver?.contactInformation?.phone || null;
+    const receiverCountry = receiver?.postalAddress?.countryCode || null;
+
+    const requestReference = dhlApiRequestPayload?.customerReferences?.[0]?.value || null;
+    
+    const shipperAccountNumber = accounts.find(acc => acc.typeCode === 'shipper')?.number || null;
+    const dutyAccountNumber = accounts.find(acc => acc.typeCode === 'duties-taxes')?.number || null;
+
+
     try {
         if (!username || !password || !shipEndpoint) {
             throw new Error('API environment variables for shipment are not configured correctly on the server.');
@@ -52,9 +73,20 @@ export default async function handler(req, res) {
         } catch(e) {
             console.error('DHL Shipment API Non-JSON Response:', responseBodyText);
             try {
+                // [FIX] Log full request details on error
+                const errorMessage = 'Failed to parse JSON response from DHL: ' + responseBodyText;
                 await sql`
-                    INSERT INTO shipment_logs (log_type, respond_warnings)
-                    VALUES ('Error', ${'Failed to parse JSON response from DHL: ' + responseBodyText});
+                    INSERT INTO shipment_logs (
+                        created_at, log_type, respond_warnings,
+                        shipper_name, shipper_company, shipper_phone, shipper_country,
+                        receiver_name, receiver_company, receiver_phone, receiver_country,
+                        request_reference, shipper_account_number, duty_account_number
+                    ) VALUES (
+                        NOW() + interval '7 hours', 'Error', ${errorMessage},
+                        ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
+                        ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
+                        ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}
+                    );
                 `;
             } catch (dbError) {
                 console.error("Database logging failed for Non-JSON response:", dbError);
@@ -70,9 +102,19 @@ export default async function handler(req, res) {
             console.error('DHL Shipment API Error:', responseBodyText);
             const errorMessage = shipmentData.detail || JSON.stringify(shipmentData);
             try {
+                // [FIX] Log full request details on error
                 await sql`
-                    INSERT INTO shipment_logs (log_type, respond_warnings)
-                    VALUES ('Error', ${errorMessage});
+                    INSERT INTO shipment_logs (
+                        created_at, log_type, respond_warnings,
+                        shipper_name, shipper_company, shipper_phone, shipper_country,
+                        receiver_name, receiver_company, receiver_phone, receiver_country,
+                        request_reference, shipper_account_number, duty_account_number
+                    ) VALUES (
+                        NOW() + interval '7 hours', 'Error', ${errorMessage},
+                        ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
+                        ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
+                        ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}
+                    );
                 `;
             } catch (dbError) {
                 console.error("Database logging failed for DHL API error:", dbError);
@@ -82,28 +124,6 @@ export default async function handler(req, res) {
         
         // On success, process and log the data
         try {
-            // --- Extracting data from the request payload ---
-            const shipper = dhlApiRequestPayload?.customerDetails?.shipperDetails;
-            const receiver = dhlApiRequestPayload?.customerDetails?.receiverDetails;
-            const accounts = dhlApiRequestPayload?.accounts || [];
-            
-            const shipperName = shipper?.contactInformation?.fullName || null;
-            const shipperCompany = shipper?.contactInformation?.companyName || null;
-            const shipperPhone = shipper?.contactInformation?.phone || null;
-            const shipperCountry = shipper?.postalAddress?.countryCode || null;
-            
-            const receiverName = receiver?.contactInformation?.fullName || null;
-            const receiverCompany = receiver?.contactInformation?.companyName || null;
-            const receiverPhone = receiver?.contactInformation?.phone || null;
-            const receiverCountry = receiver?.postalAddress?.countryCode || null;
-
-            const requestReference = dhlApiRequestPayload?.customerReferences?.[0]?.value || null;
-            
-            // [NEW] Extract account numbers from the request
-            const shipperAccountNumber = accounts.find(acc => acc.typeCode === 'shipper')?.number || null;
-            const dutyAccountNumber = accounts.find(acc => acc.typeCode === 'duties-taxes')?.number || null;
-
-
             // --- Extracting data from the response payload ---
             const trackingNumber = shipmentData?.shipmentTrackingNumber || null;
             const packageIds = shipmentData?.packages?.map(p => p.trackingNumber).join(',') || null;
@@ -113,9 +133,9 @@ export default async function handler(req, res) {
             const receiptContent = findDocContent('receipt') || findDocContent('shipmentreceipt');
             const invoiceContent = findDocContent('invoice');
 
-            // [MODIFIED] Updated SQL INSERT statement with all new fields
             await sql`
                 INSERT INTO shipment_logs (
+                    created_at,
                     log_type, 
                     respond_trackingnumber, 
                     respond_packagesid, 
@@ -136,6 +156,7 @@ export default async function handler(req, res) {
                     duty_account_number
                 )
                 VALUES (
+                    NOW() + interval '7 hours',
                     'Success', 
                     ${trackingNumber}, 
                     ${packageIds}, 
@@ -164,9 +185,19 @@ export default async function handler(req, res) {
 
     } catch (error) {
         try {
+            // [FIX] Log full request details on error
             await sql`
-                INSERT INTO shipment_logs (log_type, respond_warnings)
-                VALUES ('Error', ${error.message});
+                INSERT INTO shipment_logs (
+                    created_at, log_type, respond_warnings,
+                    shipper_name, shipper_company, shipper_phone, shipper_country,
+                    receiver_name, receiver_company, receiver_phone, receiver_country,
+                    request_reference, shipper_account_number, duty_account_number
+                ) VALUES (
+                    NOW() + interval '7 hours', 'Error', ${error.message},
+                    ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
+                    ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
+                    ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}
+                );
             `;
         } catch (dbError) {
             console.error("Database logging failed for internal server error:", dbError);
