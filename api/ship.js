@@ -1,6 +1,6 @@
 // /api/ship.js
 // Vercel Serverless Function for creating a DHL Shipment
-// v8 - Log full request details even on failure
+// v10 - Added booking_ref and detailed logging
 
 import fetch from 'node-fetch';
 import { sql } from '@vercel/postgres';
@@ -28,7 +28,10 @@ export default async function handler(req, res) {
     
     const dhlApiRequestPayload = req.body;
 
-    // [FIX] Extract request data early to ensure it's available for all log types (success or error)
+    console.log('--- Incoming Request Payload ---');
+    console.log(JSON.stringify(dhlApiRequestPayload, null, 2));
+
+    // Extract request data early for logging purposes
     const shipper = dhlApiRequestPayload?.customerDetails?.shipperDetails;
     const receiver = dhlApiRequestPayload?.customerDetails?.receiverDetails;
     const accounts = dhlApiRequestPayload?.accounts || [];
@@ -47,7 +50,6 @@ export default async function handler(req, res) {
     
     const shipperAccountNumber = accounts.find(acc => acc.typeCode === 'shipper')?.number || null;
     const dutyAccountNumber = accounts.find(acc => acc.typeCode === 'duties-taxes')?.number || null;
-
 
     try {
         if (!username || !password || !shipEndpoint) {
@@ -73,19 +75,18 @@ export default async function handler(req, res) {
         } catch(e) {
             console.error('DHL Shipment API Non-JSON Response:', responseBodyText);
             try {
-                // [FIX] Log full request details on error
                 const errorMessage = 'Failed to parse JSON response from DHL: ' + responseBodyText;
                 await sql`
                     INSERT INTO shipment_logs (
                         created_at, log_type, respond_warnings,
                         shipper_name, shipper_company, shipper_phone, shipper_country,
                         receiver_name, receiver_company, receiver_phone, receiver_country,
-                        request_reference, shipper_account_number, duty_account_number
+                        request_reference, shipper_account_number, duty_account_number, booking_ref
                     ) VALUES (
                         NOW() + interval '7 hours', 'Error', ${errorMessage},
                         ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
                         ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
-                        ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}
+                        ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}, null
                     );
                 `;
             } catch (dbError) {
@@ -98,22 +99,24 @@ export default async function handler(req, res) {
             });
         }
 
+        console.log('--- DHL API Response Body ---');
+        console.log(JSON.stringify(shipmentData, null, 2));
+
         if (!shipmentResponse.ok) {
             console.error('DHL Shipment API Error:', responseBodyText);
             const errorMessage = shipmentData.detail || JSON.stringify(shipmentData);
             try {
-                // [FIX] Log full request details on error
                 await sql`
                     INSERT INTO shipment_logs (
                         created_at, log_type, respond_warnings,
                         shipper_name, shipper_company, shipper_phone, shipper_country,
                         receiver_name, receiver_company, receiver_phone, receiver_country,
-                        request_reference, shipper_account_number, duty_account_number
+                        request_reference, shipper_account_number, duty_account_number, booking_ref
                     ) VALUES (
                         NOW() + interval '7 hours', 'Error', ${errorMessage},
                         ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
                         ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
-                        ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}
+                        ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}, null
                     );
                 `;
             } catch (dbError) {
@@ -124,8 +127,9 @@ export default async function handler(req, res) {
         
         // On success, process and log the data
         try {
-            // --- Extracting data from the response payload ---
             const trackingNumber = shipmentData?.shipmentTrackingNumber || null;
+            // [NEW] Extract booking reference number
+            const bookingRef = shipmentData?.dispatchConfirmationNumber || null;
             const packageIds = shipmentData?.packages?.map(p => p.trackingNumber).join(',') || null;
             const warnings = shipmentData?.warnings?.join('; ') || null;
             const findDocContent = (type) => shipmentData?.documents?.find(d => d.typeCode.toLowerCase() === type)?.content || null;
@@ -133,11 +137,13 @@ export default async function handler(req, res) {
             const receiptContent = findDocContent('receipt') || findDocContent('shipmentreceipt');
             const invoiceContent = findDocContent('invoice');
 
+            // [MODIFIED] Added booking_ref to the insert statement
             await sql`
                 INSERT INTO shipment_logs (
                     created_at,
                     log_type, 
                     respond_trackingnumber, 
+                    booking_ref,
                     respond_packagesid, 
                     respond_label, 
                     respond_receipt, 
@@ -159,6 +165,7 @@ export default async function handler(req, res) {
                     NOW() + interval '7 hours',
                     'Success', 
                     ${trackingNumber}, 
+                    ${bookingRef},
                     ${packageIds}, 
                     ${labelContent}, 
                     ${receiptContent}, 
@@ -181,22 +188,24 @@ export default async function handler(req, res) {
             console.error("Database logging failed for successful shipment:", dbError);
         }
 
+        console.log('--- Final Response to Client ---');
+        console.log(JSON.stringify(shipmentData, null, 2));
+
         res.status(200).json(shipmentData);
 
     } catch (error) {
         try {
-            // [FIX] Log full request details on error
             await sql`
                 INSERT INTO shipment_logs (
                     created_at, log_type, respond_warnings,
                     shipper_name, shipper_company, shipper_phone, shipper_country,
                     receiver_name, receiver_company, receiver_phone, receiver_country,
-                    request_reference, shipper_account_number, duty_account_number
+                    request_reference, shipper_account_number, duty_account_number, booking_ref
                 ) VALUES (
                     NOW() + interval '7 hours', 'Error', ${error.message},
                     ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
                     ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
-                    ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}
+                    ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}, null
                 );
             `;
         } catch (dbError) {
