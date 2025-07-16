@@ -1,82 +1,123 @@
 // /api/query-logs.js
-// v4 - Added phone filter and refactored for clarity
+// Vercel Serverless Function for querying shipment logs
+// v2 - Added search capability for booking_ref
 
 import { sql } from '@vercel/postgres';
 
-const ALLOWED_ORIGIN = 'https://viruzjoke.github.io'; 
+const ALLOWED_ORIGIN = 'https://viruzjoke.github.io';
 
 export default async function handler(req, res) {
+    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    if (req.method === 'OPTIONS') return res.status(200).end();
-    
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    if (req.method !== 'GET') {
+        res.setHeader('Allow', ['GET']);
+        return res.status(405).end(`Method ${req.method} Not Allowed`);
+    }
+
     try {
         const { 
-            trackingNumber, shipperName, receiverName, reference, 
-            accountNumber, phone, shipperCountry, receiverCountry, 
-            dateFrom, dateTo, timeFrom, timeTo
+            trackingNumber, 
+            bookingRef, // [NEW] รับค่า bookingRef จาก query string
+            shipperName, 
+            receiverName, 
+            reference, 
+            accountNumber, 
+            phone, 
+            shipperCountry, 
+            receiverCountry, 
+            dateFrom, 
+            dateTo, 
+            timeFrom, 
+            timeTo 
         } = req.query;
 
-        let query = "SELECT * FROM shipment_logs";
-        const conditions = [];
-        const values = [];
-        let valueIndex = 1;
+        let query = 'SELECT * FROM shipment_logs';
+        const whereClauses = [];
+        const queryParams = [];
+        let paramIndex = 1;
 
-        const addCondition = (clause, value) => {
-            if (value) {
-                conditions.push(clause.replace('?', `$${valueIndex++}`));
-                values.push(`%${value.replace(/\*/g, '%')}%`);
-            }
-        };
-
-        addCondition('respond_trackingnumber ILIKE ?', trackingNumber);
-        addCondition('request_reference ILIKE ?', reference);
-        addCondition('shipper_country ILIKE ?', shipperCountry);
-        addCondition('receiver_country ILIKE ?', receiverCountry);
+        if (trackingNumber) {
+            whereClauses.push(`respond_trackingnumber ILIKE $${paramIndex++}`);
+            queryParams.push(`%${trackingNumber.replace(/\*/g, '%')}%`);
+        }
+        
+        // [NEW] เพิ่มเงื่อนไขการค้นหาสำหรับ booking_ref
+        if (bookingRef) {
+            whereClauses.push(`booking_ref ILIKE $${paramIndex++}`);
+            queryParams.push(`%${bookingRef.replace(/\*/g, '%')}%`);
+        }
 
         if (shipperName) {
-            conditions.push(`(shipper_name ILIKE $${valueIndex++} OR shipper_company ILIKE $${valueIndex++})`);
-            values.push(`%${shipperName.replace(/\*/g, '%')}%`, `%${shipperName.replace(/\*/g, '%')}%`);
+            whereClauses.push(`(shipper_name ILIKE $${paramIndex} OR shipper_company ILIKE $${paramIndex})`);
+            queryParams.push(`%${shipperName.replace(/\*/g, '%')}%`);
+            paramIndex++;
         }
+
         if (receiverName) {
-            conditions.push(`(receiver_name ILIKE $${valueIndex++} OR receiver_company ILIKE $${valueIndex++})`);
-            values.push(`%${receiverName.replace(/\*/g, '%')}%`, `%${receiverName.replace(/\*/g, '%')}%`);
+            whereClauses.push(`(receiver_name ILIKE $${paramIndex} OR receiver_company ILIKE $${paramIndex})`);
+            queryParams.push(`%${receiverName.replace(/\*/g, '%')}%`);
+            paramIndex++;
         }
+
+        if (reference) {
+            whereClauses.push(`request_reference ILIKE $${paramIndex++}`);
+            queryParams.push(`%${reference.replace(/\*/g, '%')}%`);
+        }
+
         if (accountNumber) {
-            conditions.push(`(shipper_account_number ILIKE $${valueIndex++} OR duty_account_number ILIKE $${valueIndex++})`);
-            values.push(`%${accountNumber.replace(/\*/g, '%')}%`, `%${accountNumber.replace(/\*/g, '%')}%`);
+            whereClauses.push(`(shipper_account_number = $${paramIndex} OR duty_account_number = $${paramIndex})`);
+            queryParams.push(accountNumber);
+            paramIndex++;
         }
+
         if (phone) {
-            conditions.push(`(shipper_phone ILIKE $${valueIndex++} OR receiver_phone ILIKE $${valueIndex++})`);
-            values.push(`%${phone.replace(/\*/g, '%')}%`, `%${phone.replace(/\*/g, '%')}%`);
+            whereClauses.push(`(shipper_phone ILIKE $${paramIndex} OR receiver_phone ILIKE $${paramIndex})`);
+            queryParams.push(`%${phone}%`);
+            paramIndex++;
         }
         
-        if (dateFrom) {
-            const startDateTime = timeFrom ? `${dateFrom}T${timeFrom}:00` : `${dateFrom}T00:00:00`;
-            conditions.push(`created_at >= $${valueIndex++}`);
-            values.push(startDateTime);
-        }
-        if (dateTo) {
-            const endDateTime = timeTo ? `${dateTo}T${timeTo}:59` : `${dateTo}T23:59:59`;
-            conditions.push(`created_at <= $${valueIndex++}`);
-            values.push(endDateTime);
+        if (shipperCountry) {
+            whereClauses.push(`shipper_country ILIKE $${paramIndex++}`);
+            queryParams.push(`${shipperCountry}%`);
         }
 
-        if (conditions.length > 0) {
-            query += " WHERE " + conditions.join(" AND ");
+        if (receiverCountry) {
+            whereClauses.push(`receiver_country ILIKE $${paramIndex++}`);
+            queryParams.push(`${receiverCountry}%`);
         }
 
-        // [MODIFIED] Don't limit results here, let frontend handle pagination
-        query += " ORDER BY created_at DESC;";
+        if (dateFrom && dateTo) {
+            const startDateTime = timeFrom ? `${dateFrom} ${timeFrom}` : `${dateFrom} 00:00:00`;
+            const endDateTime = timeTo ? `${dateTo} ${timeTo}` : `${dateTo} 23:59:59`;
+            whereClauses.push(`created_at BETWEEN $${paramIndex++} AND $${paramIndex++}`);
+            queryParams.push(startDateTime, endDateTime);
+        } else if (dateFrom) {
+            whereClauses.push(`created_at >= $${paramIndex++}`);
+            queryParams.push(`${dateFrom} 00:00:00`);
+        } else if (dateTo) {
+            whereClauses.push(`created_at <= $${paramIndex++}`);
+            queryParams.push(`${dateTo} 23:59:59`);
+        }
 
-        const { rows } = await sql.query(query, values);
-        
+        if (whereClauses.length > 0) {
+            query += ' WHERE ' + whereClauses.join(' AND ');
+        }
+
+        query += ' ORDER BY created_at DESC';
+
+        const { rows } = await sql.query(query, queryParams);
+
         res.status(200).json(rows);
 
     } catch (error) {
-        console.error('Query Logs API error:', error);
-        res.status(500).json({ message: 'An internal server error occurred.', details: error.message });
+        console.error('Error querying logs:', error);
+        res.status(500).json({ message: 'Internal Server Error', error: error.message });
     }
 }
