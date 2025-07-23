@@ -1,6 +1,6 @@
 // /api/query-logs.js
 // Vercel Serverless Function for querying shipment logs
-// v2 - Added search capability for booking_ref
+// v3 - Format timestamp in SQL to prevent timezone conversion
 
 import { sql } from '@vercel/postgres';
 
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     try {
         const { 
             trackingNumber, 
-            bookingRef, // [NEW] รับค่า bookingRef จาก query string
+            bookingRef,
             shipperName, 
             receiverName, 
             reference, 
@@ -38,7 +38,33 @@ export default async function handler(req, res) {
             timeTo 
         } = req.query;
 
-        let query = 'SELECT * FROM shipment_logs';
+        // [FIX] Explicitly list columns and format the date using TO_CHAR.
+        // This converts the timestamp to a plain string in the specified format
+        // directly in the database, preventing any automatic timezone conversions.
+        let query = `
+            SELECT 
+                log_id,
+                log_type,
+                request_reference,
+                booking_ref,
+                shipper_name,
+                shipper_company,
+                shipper_phone,
+                shipper_country,
+                shipper_account_number,
+                receiver_name,
+                receiver_company,
+                receiver_phone,
+                receiver_country,
+                duty_account_number,
+                respond_trackingnumber,
+                respond_label,
+                respond_receipt,
+                respond_invoice,
+                TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at
+            FROM shipment_logs
+        `;
+
         const whereClauses = [];
         const queryParams = [];
         let paramIndex = 1;
@@ -48,7 +74,6 @@ export default async function handler(req, res) {
             queryParams.push(`%${trackingNumber.replace(/\*/g, '%')}%`);
         }
         
-        // [NEW] เพิ่มเงื่อนไขการค้นหาสำหรับ booking_ref
         if (bookingRef) {
             whereClauses.push(`booking_ref ILIKE $${paramIndex++}`);
             queryParams.push(`%${bookingRef.replace(/\*/g, '%')}%`);
@@ -93,6 +118,7 @@ export default async function handler(req, res) {
             queryParams.push(`${receiverCountry}%`);
         }
 
+        // Note: This part now compares against the original 'created_at' column, not the formatted string.
         if (dateFrom && dateTo) {
             const startDateTime = timeFrom ? `${dateFrom} ${timeFrom}` : `${dateFrom} 00:00:00`;
             const endDateTime = timeTo ? `${dateTo} ${timeTo}` : `${dateTo} 23:59:59`;
