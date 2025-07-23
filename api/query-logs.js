@@ -1,6 +1,6 @@
 // /api/query-logs.js
 // Vercel Serverless Function for querying shipment logs
-// v3 - Format timestamp in SQL to prevent timezone conversion
+// v4 - Removed non-existent log_id column from select statement
 
 import { sql } from '@vercel/postgres';
 
@@ -38,12 +38,9 @@ export default async function handler(req, res) {
             timeTo 
         } = req.query;
 
-        // [FIX] Explicitly list columns and format the date using TO_CHAR.
-        // This converts the timestamp to a plain string in the specified format
-        // directly in the database, preventing any automatic timezone conversions.
+        // [FIX] Removed the 'log_id' column as it does not exist in the table.
         let query = `
             SELECT 
-                log_id,
                 log_type,
                 request_reference,
                 booking_ref,
