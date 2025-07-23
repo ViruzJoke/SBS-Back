@@ -1,6 +1,6 @@
 // /api/ship.js
 // Vercel Serverless Function for creating a DHL Shipment
-// v10 - Added booking_ref and detailed logging
+// v11 - Improved error handling for "Multiple problems" and ensured GMT+7 timezone for logs.
 
 import fetch from 'node-fetch';
 import { sql } from '@vercel/postgres';
@@ -83,7 +83,7 @@ export default async function handler(req, res) {
                         receiver_name, receiver_company, receiver_phone, receiver_country,
                         request_reference, shipper_account_number, duty_account_number, booking_ref
                     ) VALUES (
-                        NOW() + interval '7 hours', 'Error', ${errorMessage},
+                        NOW() AT TIME ZONE 'Asia/Bangkok', 'Error', ${errorMessage},
                         ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
                         ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
                         ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}, null
@@ -104,7 +104,18 @@ export default async function handler(req, res) {
 
         if (!shipmentResponse.ok) {
             console.error('DHL Shipment API Error:', responseBodyText);
-            const errorMessage = shipmentData.detail || JSON.stringify(shipmentData);
+            
+            // [MODIFIED] v2 Start: Enhanced Error Logging
+            let errorMessage = shipmentData.detail || JSON.stringify(shipmentData);
+
+            // Check for the specific "Multiple problems" error
+            if (shipmentData.title === "Multiple problems found, see Additional Details" && Array.isArray(shipmentData.additionalDetails)) {
+                // Format the additional details into a readable string for logging
+                const additionalDetailsString = shipmentData.additionalDetails.map(detail => `[${detail.schemaPath}] ${detail.message}`).join('; ');
+                errorMessage = `${shipmentData.detail}; Additional Details: ${additionalDetailsString}`;
+            }
+            // [MODIFIED] v2 End
+
             try {
                 await sql`
                     INSERT INTO shipment_logs (
@@ -113,7 +124,7 @@ export default async function handler(req, res) {
                         receiver_name, receiver_company, receiver_phone, receiver_country,
                         request_reference, shipper_account_number, duty_account_number, booking_ref
                     ) VALUES (
-                        NOW() + interval '7 hours', 'Error', ${errorMessage},
+                        NOW() AT TIME ZONE 'Asia/Bangkok', 'Error', ${errorMessage},
                         ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
                         ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
                         ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}, null
@@ -122,13 +133,13 @@ export default async function handler(req, res) {
             } catch (dbError) {
                 console.error("Database logging failed for DHL API error:", dbError);
             }
+            // The original shipmentData (which includes additionalDetails) is sent back to the client
             return res.status(shipmentResponse.status).json(shipmentData);
         }
         
         // On success, process and log the data
         try {
             const trackingNumber = shipmentData?.shipmentTrackingNumber || null;
-            // [NEW] Extract booking reference number
             const bookingRef = shipmentData?.dispatchConfirmationNumber || null;
             const packageIds = shipmentData?.packages?.map(p => p.trackingNumber).join(',') || null;
             const warnings = shipmentData?.warnings?.join('; ') || null;
@@ -137,7 +148,7 @@ export default async function handler(req, res) {
             const receiptContent = findDocContent('receipt') || findDocContent('shipmentreceipt');
             const invoiceContent = findDocContent('invoice');
 
-            // [MODIFIED] Added booking_ref to the insert statement
+            // [MODIFIED] v2: Ensured timezone is explicitly set for Thailand
             await sql`
                 INSERT INTO shipment_logs (
                     created_at,
@@ -162,7 +173,7 @@ export default async function handler(req, res) {
                     duty_account_number
                 )
                 VALUES (
-                    NOW() + interval '7 hours',
+                    NOW() AT TIME ZONE 'Asia/Bangkok',
                     'Success', 
                     ${trackingNumber}, 
                     ${bookingRef},
@@ -195,6 +206,7 @@ export default async function handler(req, res) {
 
     } catch (error) {
         try {
+             // [MODIFIED] v2: Ensured timezone is explicitly set for Thailand
             await sql`
                 INSERT INTO shipment_logs (
                     created_at, log_type, respond_warnings,
@@ -202,7 +214,7 @@ export default async function handler(req, res) {
                     receiver_name, receiver_company, receiver_phone, receiver_country,
                     request_reference, shipper_account_number, duty_account_number, booking_ref
                 ) VALUES (
-                    NOW() + interval '7 hours', 'Error', ${error.message},
+                    NOW() AT TIME ZONE 'Asia/Bangkok', 'Error', ${error.message},
                     ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
                     ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
                     ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}, null
