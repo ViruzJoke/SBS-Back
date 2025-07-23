@@ -1,6 +1,6 @@
 // /api/ship.js
 // Vercel Serverless Function for creating a DHL Shipment
-// v11 - Improved error handling for "Multiple problems" and ensured GMT+7 timezone for logs.
+// v12 - Added billing_account_number to database logs.
 
 import fetch from 'node-fetch';
 import { sql } from '@vercel/postgres';
@@ -49,6 +49,8 @@ export default async function handler(req, res) {
     const requestReference = dhlApiRequestPayload?.customerReferences?.[0]?.value || null;
     
     const shipperAccountNumber = accounts.find(acc => acc.typeCode === 'shipper')?.number || null;
+    // [MODIFIED] v4: Extract billing account number
+    const billingAccountNumber = accounts.find(acc => acc.typeCode === 'payer')?.number || null;
     const dutyAccountNumber = accounts.find(acc => acc.typeCode === 'duties-taxes')?.number || null;
 
     try {
@@ -76,17 +78,18 @@ export default async function handler(req, res) {
             console.error('DHL Shipment API Non-JSON Response:', responseBodyText);
             try {
                 const errorMessage = 'Failed to parse JSON response from DHL: ' + responseBodyText;
+                // [MODIFIED] v4: Added billing_account_number to error log
                 await sql`
                     INSERT INTO shipment_logs (
                         created_at, log_type, respond_warnings,
                         shipper_name, shipper_company, shipper_phone, shipper_country,
                         receiver_name, receiver_company, receiver_phone, receiver_country,
-                        request_reference, shipper_account_number, duty_account_number, booking_ref
+                        request_reference, shipper_account_number, billing_account_number, duty_account_number, booking_ref
                     ) VALUES (
                         NOW() AT TIME ZONE 'Asia/Bangkok', 'Error', ${errorMessage},
                         ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
                         ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
-                        ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}, null
+                        ${requestReference}, ${shipperAccountNumber}, ${billingAccountNumber}, ${dutyAccountNumber}, null
                     );
                 `;
             } catch (dbError) {
@@ -105,35 +108,31 @@ export default async function handler(req, res) {
         if (!shipmentResponse.ok) {
             console.error('DHL Shipment API Error:', responseBodyText);
             
-            // [MODIFIED] v2 Start: Enhanced Error Logging
             let errorMessage = shipmentData.detail || JSON.stringify(shipmentData);
 
-            // Check for the specific "Multiple problems" error
             if (shipmentData.title === "Multiple problems found, see Additional Details" && Array.isArray(shipmentData.additionalDetails)) {
-                // Format the additional details into a readable string for logging
                 const additionalDetailsString = shipmentData.additionalDetails.map(detail => `[${detail.schemaPath}] ${detail.message}`).join('; ');
                 errorMessage = `${shipmentData.detail}; Additional Details: ${additionalDetailsString}`;
             }
-            // [MODIFIED] v2 End
 
             try {
+                // [MODIFIED] v4: Added billing_account_number to error log
                 await sql`
                     INSERT INTO shipment_logs (
                         created_at, log_type, respond_warnings,
                         shipper_name, shipper_company, shipper_phone, shipper_country,
                         receiver_name, receiver_company, receiver_phone, receiver_country,
-                        request_reference, shipper_account_number, duty_account_number, booking_ref
+                        request_reference, shipper_account_number, billing_account_number, duty_account_number, booking_ref
                     ) VALUES (
                         NOW() AT TIME ZONE 'Asia/Bangkok', 'Error', ${errorMessage},
                         ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
                         ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
-                        ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}, null
+                        ${requestReference}, ${shipperAccountNumber}, ${billingAccountNumber}, ${dutyAccountNumber}, null
                     );
                 `;
             } catch (dbError) {
                 console.error("Database logging failed for DHL API error:", dbError);
             }
-            // The original shipmentData (which includes additionalDetails) is sent back to the client
             return res.status(shipmentResponse.status).json(shipmentData);
         }
         
@@ -148,7 +147,7 @@ export default async function handler(req, res) {
             const receiptContent = findDocContent('receipt') || findDocContent('shipmentreceipt');
             const invoiceContent = findDocContent('invoice');
 
-            // [MODIFIED] v2: Ensured timezone is explicitly set for Thailand
+            // [MODIFIED] v4: Added billing_account_number to success log
             await sql`
                 INSERT INTO shipment_logs (
                     created_at,
@@ -170,6 +169,7 @@ export default async function handler(req, res) {
                     receiver_country,
                     request_reference,
                     shipper_account_number,
+                    billing_account_number,
                     duty_account_number
                 )
                 VALUES (
@@ -192,6 +192,7 @@ export default async function handler(req, res) {
                     ${receiverCountry},
                     ${requestReference},
                     ${shipperAccountNumber},
+                    ${billingAccountNumber},
                     ${dutyAccountNumber}
                 );
             `;
@@ -206,18 +207,18 @@ export default async function handler(req, res) {
 
     } catch (error) {
         try {
-             // [MODIFIED] v2: Ensured timezone is explicitly set for Thailand
+            // [MODIFIED] v4: Added billing_account_number to error log
             await sql`
                 INSERT INTO shipment_logs (
                     created_at, log_type, respond_warnings,
                     shipper_name, shipper_company, shipper_phone, shipper_country,
                     receiver_name, receiver_company, receiver_phone, receiver_country,
-                    request_reference, shipper_account_number, duty_account_number, booking_ref
+                    request_reference, shipper_account_number, billing_account_number, duty_account_number, booking_ref
                 ) VALUES (
                     NOW() AT TIME ZONE 'Asia/Bangkok', 'Error', ${error.message},
                     ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
                     ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
-                    ${requestReference}, ${shipperAccountNumber}, ${dutyAccountNumber}, null
+                    ${requestReference}, ${shipperAccountNumber}, ${billingAccountNumber}, ${dutyAccountNumber}, null
                 );
             `;
         } catch (dbError) {
