@@ -1,6 +1,6 @@
 // /api/query-logs.js
 // Vercel Serverless Function for querying shipment logs
-// v4 - Removed non-existent log_id column from select statement
+// v5 - Added respond_warnings to the SELECT statement
 
 import { sql } from '@vercel/postgres';
 
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
             timeTo 
         } = req.query;
 
-        // [FIX] Removed the 'log_id' column as it does not exist in the table.
+        // [FIXED] Added 'respond_warnings' to the SELECT statement
         let query = `
             SELECT 
                 log_type,
@@ -58,6 +58,7 @@ export default async function handler(req, res) {
                 respond_label,
                 respond_receipt,
                 respond_invoice,
+                respond_warnings,
                 TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at
             FROM shipment_logs
         `;
@@ -115,7 +116,6 @@ export default async function handler(req, res) {
             queryParams.push(`${receiverCountry}%`);
         }
 
-        // Note: This part now compares against the original 'created_at' column, not the formatted string.
         if (dateFrom && dateTo) {
             const startDateTime = timeFrom ? `${dateFrom} ${timeFrom}` : `${dateFrom} 00:00:00`;
             const endDateTime = timeTo ? `${dateTo} ${timeTo}` : `${dateTo} 23:59:59`;
