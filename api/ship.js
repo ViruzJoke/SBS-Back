@@ -1,6 +1,6 @@
 // /api/ship.js
 // Vercel Serverless Function for creating a DHL Shipment
-// v12 - Added billing_account_number to database logs.
+// v13 - Handles multiple error formats and logs additionalDetails.
 
 import fetch from 'node-fetch';
 import { sql } from '@vercel/postgres';
@@ -49,7 +49,6 @@ export default async function handler(req, res) {
     const requestReference = dhlApiRequestPayload?.customerReferences?.[0]?.value || null;
     
     const shipperAccountNumber = accounts.find(acc => acc.typeCode === 'shipper')?.number || null;
-    // [MODIFIED] v4: Extract billing account number
     const billingAccountNumber = accounts.find(acc => acc.typeCode === 'payer')?.number || null;
     const dutyAccountNumber = accounts.find(acc => acc.typeCode === 'duties-taxes')?.number || null;
 
@@ -78,7 +77,6 @@ export default async function handler(req, res) {
             console.error('DHL Shipment API Non-JSON Response:', responseBodyText);
             try {
                 const errorMessage = 'Failed to parse JSON response from DHL: ' + responseBodyText;
-                // [MODIFIED] v4: Added billing_account_number to error log
                 await sql`
                     INSERT INTO shipment_logs (
                         created_at, log_type, respond_warnings,
@@ -108,15 +106,17 @@ export default async function handler(req, res) {
         if (!shipmentResponse.ok) {
             console.error('DHL Shipment API Error:', responseBodyText);
             
-            let errorMessage = shipmentData.detail || JSON.stringify(shipmentData);
+            // --- MODIFICATION START: Handle multiple error formats ---
+            let errorMessage = shipmentData.detail || shipmentData.message || JSON.stringify(shipmentData);
 
-            if (shipmentData.title === "Multiple problems found, see Additional Details" && Array.isArray(shipmentData.additionalDetails)) {
-                const additionalDetailsString = shipmentData.additionalDetails.map(detail => `[${detail.schemaPath}] ${detail.message}`).join('; ');
-                errorMessage = `${shipmentData.detail}; Additional Details: ${additionalDetailsString}`;
+            if (Array.isArray(shipmentData.additionalDetails) && shipmentData.additionalDetails.length > 0) {
+                // Handle both array of strings and array of objects
+                const additionalDetailsString = shipmentData.additionalDetails.map(detail => detail.message || detail).join('; ');
+                errorMessage = `${errorMessage}; Additional Details: ${additionalDetailsString}`;
             }
+            // --- MODIFICATION END ---
 
             try {
-                // [MODIFIED] v4: Added billing_account_number to error log
                 await sql`
                     INSERT INTO shipment_logs (
                         created_at, log_type, respond_warnings,
@@ -147,7 +147,6 @@ export default async function handler(req, res) {
             const receiptContent = findDocContent('receipt') || findDocContent('shipmentreceipt');
             const invoiceContent = findDocContent('invoice');
 
-            // [MODIFIED] v4: Added billing_account_number to success log
             await sql`
                 INSERT INTO shipment_logs (
                     created_at,
@@ -207,7 +206,6 @@ export default async function handler(req, res) {
 
     } catch (error) {
         try {
-            // [MODIFIED] v4: Added billing_account_number to error log
             await sql`
                 INSERT INTO shipment_logs (
                     created_at, log_type, respond_warnings,
