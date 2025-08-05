@@ -7,15 +7,18 @@ import { sql } from '@vercel/postgres';
 const ALLOWED_ORIGINS = [
     'https://viruzjoke.github.io',
     'thcfit.duckdns.org',
-    'thcfit-admin.duckdns.org'
+    'thcfit-admin.duckdns.org',
+    'https://thcfit.vercel.app',
+    'https://thcfit-admin.vercel.app'
 ];
 
-const origin = req.headers.origin;
+export default async function handler(req, res) {
+
+    const origin = req.headers.origin;
     if (ALLOWED_ORIGINS.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     }
-
-export default async function handler(req, res) {
+    
     res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -116,4 +119,5 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'An internal server error occurred.', details: error.message });
     }
 }
+
 
