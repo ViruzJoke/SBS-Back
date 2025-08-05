@@ -8,7 +8,9 @@ import { sql } from '@vercel/postgres';
 const ALLOWED_ORIGINS = [
     'https://viruzjoke.github.io',
     'thcfit.duckdns.org',
-    'thcfit-admin.duckdns.org'
+    'thcfit-admin.duckdns.org',
+    'https://thcfit.vercel.app',
+    'https://thcfit-admin.vercel.app'
 ];
 
 export default async function handler(req, res) {
@@ -156,3 +158,4 @@ export default async function handler(req, res) {
         res.status(500).json({ message: 'Internal Server Error', error: error.message });
     }
 }
+
