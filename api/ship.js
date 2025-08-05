@@ -1,6 +1,6 @@
 // /api/ship.js
 // Vercel Serverless Function for creating a DHL Shipment
-// v13 - Handles multiple error formats and logs additionalDetails.
+// v14 - Added Shipper/Receiver Email logging
 
 import fetch from 'node-fetch';
 import { sql } from '@vercel/postgres';
@@ -15,7 +15,6 @@ const ALLOWED_ORIGINS = [
 
 export default async function handler(req, res) {
     // Set CORS headers
-
     const origin = req.headers.origin;
     if (ALLOWED_ORIGINS.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
@@ -50,11 +49,13 @@ export default async function handler(req, res) {
     const shipperName = shipper?.contactInformation?.fullName || null;
     const shipperCompany = shipper?.contactInformation?.companyName || null;
     const shipperPhone = shipper?.contactInformation?.phone || null;
+    const shipperEmail = shipper?.contactInformation?.email || null; // Added Shipper Email
     const shipperCountry = shipper?.postalAddress?.countryCode || null;
     
     const receiverName = receiver?.contactInformation?.fullName || null;
     const receiverCompany = receiver?.contactInformation?.companyName || null;
     const receiverPhone = receiver?.contactInformation?.phone || null;
+    const receiverEmail = receiver?.contactInformation?.email || null; // Added Receiver Email
     const receiverCountry = receiver?.postalAddress?.countryCode || null;
 
     const requestReference = dhlApiRequestPayload?.customerReferences?.[0]?.value || null;
@@ -91,13 +92,13 @@ export default async function handler(req, res) {
                 await sql`
                     INSERT INTO shipment_logs (
                         created_at, log_type, respond_warnings,
-                        shipper_name, shipper_company, shipper_phone, shipper_country,
-                        receiver_name, receiver_company, receiver_phone, receiver_country,
+                        shipper_name, shipper_company, shipper_phone, shipper_email, shipper_country,
+                        receiver_name, receiver_company, receiver_phone, receiver_email, receiver_country,
                         request_reference, shipper_account_number, billing_account_number, duty_account_number, booking_ref
                     ) VALUES (
                         NOW() AT TIME ZONE 'Asia/Bangkok', 'Error', ${errorMessage},
-                        ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
-                        ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
+                        ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperEmail}, ${shipperCountry},
+                        ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverEmail}, ${receiverCountry},
                         ${requestReference}, ${shipperAccountNumber}, ${billingAccountNumber}, ${dutyAccountNumber}, null
                     );
                 `;
@@ -117,27 +118,24 @@ export default async function handler(req, res) {
         if (!shipmentResponse.ok) {
             console.error('DHL Shipment API Error:', responseBodyText);
             
-            // --- MODIFICATION START: Handle multiple error formats ---
             let errorMessage = shipmentData.detail || shipmentData.message || JSON.stringify(shipmentData);
 
             if (Array.isArray(shipmentData.additionalDetails) && shipmentData.additionalDetails.length > 0) {
-                // Handle both array of strings and array of objects
                 const additionalDetailsString = shipmentData.additionalDetails.map(detail => detail.message || detail).join('; ');
                 errorMessage = `${errorMessage}; Additional Details: ${additionalDetailsString}`;
             }
-            // --- MODIFICATION END ---
 
             try {
                 await sql`
                     INSERT INTO shipment_logs (
                         created_at, log_type, respond_warnings,
-                        shipper_name, shipper_company, shipper_phone, shipper_country,
-                        receiver_name, receiver_company, receiver_phone, receiver_country,
+                        shipper_name, shipper_company, shipper_phone, shipper_email, shipper_country,
+                        receiver_name, receiver_company, receiver_phone, receiver_email, receiver_country,
                         request_reference, shipper_account_number, billing_account_number, duty_account_number, booking_ref
                     ) VALUES (
                         NOW() AT TIME ZONE 'Asia/Bangkok', 'Error', ${errorMessage},
-                        ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
-                        ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
+                        ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperEmail}, ${shipperCountry},
+                        ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverEmail}, ${receiverCountry},
                         ${requestReference}, ${shipperAccountNumber}, ${billingAccountNumber}, ${dutyAccountNumber}, null
                     );
                 `;
@@ -172,10 +170,12 @@ export default async function handler(req, res) {
                     shipper_name,
                     shipper_company,
                     shipper_phone,
+                    shipper_email,
                     shipper_country,
                     receiver_name,
                     receiver_company,
                     receiver_phone,
+                    receiver_email,
                     receiver_country,
                     request_reference,
                     shipper_account_number,
@@ -195,10 +195,12 @@ export default async function handler(req, res) {
                     ${shipperName},
                     ${shipperCompany},
                     ${shipperPhone},
+                    ${shipperEmail},
                     ${shipperCountry},
                     ${receiverName},
                     ${receiverCompany},
                     ${receiverPhone},
+                    ${receiverEmail},
                     ${receiverCountry},
                     ${requestReference},
                     ${shipperAccountNumber},
@@ -220,13 +222,13 @@ export default async function handler(req, res) {
             await sql`
                 INSERT INTO shipment_logs (
                     created_at, log_type, respond_warnings,
-                    shipper_name, shipper_company, shipper_phone, shipper_country,
-                    receiver_name, receiver_company, receiver_phone, receiver_country,
+                    shipper_name, shipper_company, shipper_phone, shipper_email, shipper_country,
+                    receiver_name, receiver_company, receiver_phone, receiver_email, receiver_country,
                     request_reference, shipper_account_number, billing_account_number, duty_account_number, booking_ref
                 ) VALUES (
                     NOW() AT TIME ZONE 'Asia/Bangkok', 'Error', ${error.message},
-                    ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperCountry},
-                    ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverCountry},
+                    ${shipperName}, ${shipperCompany}, ${shipperPhone}, ${shipperEmail}, ${shipperCountry},
+                    ${receiverName}, ${receiverCompany}, ${receiverPhone}, ${receiverEmail}, ${receiverCountry},
                     ${requestReference}, ${shipperAccountNumber}, ${billingAccountNumber}, ${dutyAccountNumber}, null
                 );
             `;
@@ -241,5 +243,3 @@ export default async function handler(req, res) {
         });
     }
 }
-
-
