@@ -1,10 +1,9 @@
 // /api/query-logs.js
 // Vercel Serverless Function for querying shipment logs
-// v5 - Added respond_warnings to the SELECT statement
+// v6 - Added email search for shipper and receiver
 
 import { sql } from '@vercel/postgres';
 
-// แก้ไข: เพิ่ม https:// และตรวจสอบให้แน่ใจว่าตรงกับ Origin ที่เบราว์เซอร์ส่งมา
 const ALLOWED_ORIGINS = [
     'https://viruzjoke.github.io',
     'thcfit.duckdns.org',
@@ -19,9 +18,6 @@ export default async function handler(req, res) {
     if (ALLOWED_ORIGINS.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     }
-    
-    // แก้ไข: ลบบรรทัดนี้ออก เพราะซ้ำซ้อนและผิดพลาด
-    // res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN); 
     
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -43,7 +39,8 @@ export default async function handler(req, res) {
             receiverName, 
             reference, 
             accountNumber, 
-            phone, 
+            phone,
+            email, // Added email parameter
             shipperCountry, 
             receiverCountry, 
             dateFrom, 
@@ -52,7 +49,7 @@ export default async function handler(req, res) {
             timeTo 
         } = req.query;
 
-        // [FIXED] Added 'respond_warnings' to the SELECT statement
+        // Added shipper_email and receiver_email to the SELECT statement
         let query = `
             SELECT 
                 log_type,
@@ -61,11 +58,13 @@ export default async function handler(req, res) {
                 shipper_name,
                 shipper_company,
                 shipper_phone,
+                shipper_email,
                 shipper_country,
                 shipper_account_number,
                 receiver_name,
                 receiver_company,
                 receiver_phone,
+                receiver_email,
                 receiver_country,
                 duty_account_number,
                 respond_trackingnumber,
@@ -119,6 +118,13 @@ export default async function handler(req, res) {
             queryParams.push(`%${phone}%`);
             paramIndex++;
         }
+
+        // Added condition for email search
+        if (email) {
+            whereClauses.push(`(shipper_email ILIKE $${paramIndex} OR receiver_email ILIKE $${paramIndex})`);
+            queryParams.push(`%${email}%`);
+            paramIndex++;
+        }
         
         if (shipperCountry) {
             whereClauses.push(`shipper_country ILIKE $${paramIndex++}`);
@@ -158,4 +164,3 @@ export default async function handler(req, res) {
         res.status(500).json({ message: 'Internal Server Error', error: error.message });
     }
 }
-
