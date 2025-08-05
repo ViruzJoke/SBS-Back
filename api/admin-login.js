@@ -7,8 +7,10 @@ import bcrypt from 'bcrypt';
 // [สำคัญ] แก้ไข URL นี้ให้เป็น URL ของหน้า Admin ของคุณ
 const ALLOWED_ORIGINS = [
     'https://viruzjoke.github.io',
-    'https://thcfit.duckdns.org',      // แก้ไข: เพิ่ม https://
-    'https://thcfit-admin.duckdns.org' // แก้ไข: เพิ่ม https://
+    'thcfit.duckdns.org',
+    'thcfit-admin.duckdns.org',
+    'https://thcfit.vercel.app',
+    'https://thcfit-admin.vercel.app'
 ];
 
 export default async function handler(req, res) {
@@ -61,3 +63,4 @@ export default async function handler(req, res) {
         res.status(500).json({ message: 'An internal server error occurred.' });
     }
 }
+
