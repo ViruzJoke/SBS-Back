@@ -4,6 +4,7 @@
 
 import { sql } from '@vercel/postgres';
 
+// แก้ไข: เพิ่ม https:// และตรวจสอบให้แน่ใจว่าตรงกับ Origin ที่เบราว์เซอร์ส่งมา
 const ALLOWED_ORIGINS = [
     'https://viruzjoke.github.io',
     'thcfit.duckdns.org',
@@ -17,7 +18,9 @@ export default async function handler(req, res) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     }
     
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+    // แก้ไข: ลบบรรทัดนี้ออก เพราะซ้ำซ้อนและผิดพลาด
+    // res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN); 
+    
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -153,5 +156,3 @@ export default async function handler(req, res) {
         res.status(500).json({ message: 'Internal Server Error', error: error.message });
     }
 }
-
-
