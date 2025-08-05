@@ -8,17 +8,19 @@ import { sql } from '@vercel/postgres';
 const ALLOWED_ORIGINS = [
     'https://viruzjoke.github.io',
     'thcfit.duckdns.org',
-    'thcfit-admin.duckdns.org'
+    'thcfit-admin.duckdns.org',
+    'https://thcfit.vercel.app',
+    'https://thcfit-admin.vercel.app'
 ];
-
-const origin = req.headers.origin;
-    if (ALLOWED_ORIGINS.includes(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-    }
 
 export default async function handler(req, res) {
     // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+
+    const origin = req.headers.origin;
+    if (ALLOWED_ORIGINS.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -239,4 +241,5 @@ export default async function handler(req, res) {
         });
     }
 }
+
 
