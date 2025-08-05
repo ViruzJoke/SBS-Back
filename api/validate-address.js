@@ -4,16 +4,25 @@
 
 import fetch from 'node-fetch';
 
-// The origin of your GitHub Pages site where the frontend is hosted.
-const ALLOWED_ORIGIN = 'https://viruzjoke.github.io';
+// 1. เปลี่ยนจาก String เป็น Array และเพิ่ม Origin ที่ต้องการอนุญาต
+const ALLOWED_ORIGINS = [
+    'https://viruzjoke.github.io',
+    'thcfit.duckdns.org'
+    // เพิ่ม Origin อื่นๆ ที่นี่ได้เลย
+    // 'https://your-vercel-preview-url.vercel.app'
+];
 
 // Your DHL API Key.
 const DHL_API_KEY = '36c7dae5-aa2c-43f8-9494-e1bc2fff8c8d';
 const DHL_API_ENDPOINT = 'https://wsbexpress.dhl.com/postalLocation/v1';
 
 export default async function handler(req, res) {
-    // Set CORS headers to allow requests from your frontend.
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+    // 2. เพิ่มตรรกะในการตรวจสอบและตั้งค่า CORS Header แบบไดนามิก
+    const origin = req.headers.origin;
+    if (ALLOWED_ORIGINS.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
