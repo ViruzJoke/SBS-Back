@@ -12,7 +12,16 @@ const DHL_PASSWORD = process.env.DHL_PASSWORD;
 export default async function handler(req, res) {
     // *** การตั้งค่า CORS (Cross-Origin Resource Sharing) ***
     // ระบุโดเมนของ Frontend ที่จะอนุญาตให้เรียก API นี้ได้
-    const allowedOrigin = 'https://viruzjoke.github.io'; 
+    const ALLOWED_ORIGINS = [
+    'https://viruzjoke.github.io',
+    'thcfit.duckdns.org',
+    'thcfit-admin.duckdns.org'
+];
+
+const origin = req.headers.origin;
+    if (ALLOWED_ORIGINS.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
 
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -84,3 +93,4 @@ export default async function handler(req, res) {
         res.status(500).json({ title: 'Internal Server Error', detail: error.message });
     }
 }
+
