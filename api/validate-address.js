@@ -7,9 +7,10 @@ import fetch from 'node-fetch';
 // 1. เปลี่ยนจาก String เป็น Array และเพิ่ม Origin ที่ต้องการอนุญาต
 const ALLOWED_ORIGINS = [
     'https://viruzjoke.github.io',
-    'thcfit.duckdns.org'
-    // เพิ่ม Origin อื่นๆ ที่นี่ได้เลย
-    // 'https://your-vercel-preview-url.vercel.app'
+    'thcfit.duckdns.org',
+    'thcfit-admin.duckdns.org',
+    'https://thcfit.vercel.app',
+    'https://thcfit-admin.vercel.app'
 ];
 
 // Your DHL API Key.
@@ -84,3 +85,4 @@ export default async function handler(req, res) {
         res.status(500).json({ error: 'An internal server error occurred.', details: error.message });
     }
 }
+
