@@ -10,13 +10,13 @@ const ALLOWED_ORIGINS = [
     'thcfit-admin.duckdns.org'
 ];
 
-const origin = req.headers.origin;
+export default async function handler(req, res) {
+    // Set CORS headers
+    const origin = req.headers.origin;
     if (ALLOWED_ORIGINS.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     }
-
-export default async function handler(req, res) {
-    // Set CORS headers
+    
     res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -153,4 +153,5 @@ export default async function handler(req, res) {
         res.status(500).json({ message: 'Internal Server Error', error: error.message });
     }
 }
+
 
