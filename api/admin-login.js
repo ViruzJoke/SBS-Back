@@ -5,7 +5,16 @@ import { sql } from '@vercel/postgres';
 import bcrypt from 'bcrypt';
 
 // [สำคัญ] แก้ไข URL นี้ให้เป็น URL ของหน้า Admin ของคุณ
-const ALLOWED_ORIGIN = 'https://viruzjoke.github.io';
+const ALLOWED_ORIGINS = [
+    'https://viruzjoke.github.io',
+    'thcfit.duckdns.org',
+    'thcfit-admin.duckdns.org'
+];
+
+const origin = req.headers.origin;
+    if (ALLOWED_ORIGINS.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
 
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
@@ -50,3 +59,4 @@ export default async function handler(req, res) {
         res.status(500).json({ message: 'An internal server error occurred.' });
     }
 }
+
