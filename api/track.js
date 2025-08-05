@@ -15,7 +15,9 @@ export default async function handler(req, res) {
     const ALLOWED_ORIGINS = [
     'https://viruzjoke.github.io',
     'thcfit.duckdns.org',
-    'thcfit-admin.duckdns.org'
+    'thcfit-admin.duckdns.org',
+    'https://thcfit.vercel.app',
+    'https://thcfit-admin.vercel.app'
 ];
 
 const origin = req.headers.origin;
@@ -23,7 +25,6 @@ const origin = req.headers.origin;
         res.setHeader('Access-Control-Allow-Origin', origin);
     }
 
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Max-Age', '86400'); // 24 ชั่วโมง
@@ -93,4 +94,5 @@ const origin = req.headers.origin;
         res.status(500).json({ title: 'Internal Server Error', detail: error.message });
     }
 }
+
 
