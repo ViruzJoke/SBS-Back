@@ -49,13 +49,13 @@ export default async function handler(req, res) {
     const shipperName = shipper?.contactInformation?.fullName || null;
     const shipperCompany = shipper?.contactInformation?.companyName || null;
     const shipperPhone = shipper?.contactInformation?.phone || null;
-    const shipperEmail = shipper?.contactInformation?.email || null; // Added Shipper Email
+    const shipperEmail = shipper?.contactInformation?.email || null; 
     const shipperCountry = shipper?.postalAddress?.countryCode || null;
     
     const receiverName = receiver?.contactInformation?.fullName || null;
     const receiverCompany = receiver?.contactInformation?.companyName || null;
     const receiverPhone = receiver?.contactInformation?.phone || null;
-    const receiverEmail = receiver?.contactInformation?.email || null; // Added Receiver Email
+    const receiverEmail = receiver?.contactInformation?.email || null;
     const receiverCountry = receiver?.postalAddress?.countryCode || null;
 
     const requestReference = dhlApiRequestPayload?.customerReferences?.[0]?.value || null;
@@ -243,3 +243,4 @@ export default async function handler(req, res) {
         });
     }
 }
+
