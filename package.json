@@ -1,5 +1,5 @@
 {
-  "name": "dbs-back",
+  "name": "sbs-back",
   "version": "1.0.0",
   "description": "Backend API for DHL Backup Solution",
   "main": "index.js",
