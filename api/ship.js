@@ -14,6 +14,18 @@ const ALLOWED_ORIGINS = [
 ];
 
 export default async function handler(req, res) {
+
+    // ================= START: Code Debugging =================
+    console.log("--- VERCEL ENVIRONMENT DEBUG ---");
+    console.log("Timestamp:", new Date().toISOString());
+    console.log("DHL_USERNAME (from env):", process.env.DHL_USERNAME);
+    console.log("DHL_PASSWORD (from env):", process.env.DHL_PASSWORD ? "Exists (hidden for security)" : "MISSING!");
+	console.log("DHL_USERNAME_Production (from env):", process.env.DHL_USERNAME_Production);
+    console.log("DHL_PASSWORD_Production (from env):", process.env.DHL_PASSWORD_Production ? "Exists (hidden for security)" : "MISSING!");
+    console.log("DHL_API_ENDPOINT_SHIP (from env):", process.env.DHL_API_ENDPOINT_SHIP);
+    console.log("--- END DEBUG ---");
+    // ================== END: Code Debugging ==================
+    
     // Set CORS headers
     const origin = req.headers.origin;
     if (ALLOWED_ORIGINS.includes(origin)) {
@@ -243,5 +255,6 @@ export default async function handler(req, res) {
         });
     }
 }
+
 
 
