@@ -32,8 +32,8 @@ export default async function handler(req, res) {
         return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
 
-    const username = process.env.DHL_USERNAME;
-    const password = process.env.DHL_PASSWORD;
+    const username = process.env.DHL_USERNAME_Production;
+    const password = process.env.DHL_PASSWORD_Production;
     const shipEndpoint = process.env.DHL_API_ENDPOINT_SHIP;
     
     const dhlApiRequestPayload = req.body;
@@ -243,4 +243,5 @@ export default async function handler(req, res) {
         });
     }
 }
+
 
