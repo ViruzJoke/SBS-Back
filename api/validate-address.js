@@ -9,8 +9,9 @@ const ALLOWED_ORIGINS = [
     'https://thcfit-admin.vercel.app'
 ];
 
-// ใช้ Environment Variable เป็นวิธีที่ถูกต้องและปลอดภัยที่สุด
-const DHL_API_KEY = process.env.DHL_VALIDATE_ADDRESS_API_KEY; 
+// --- Hardcode API Key for testing ---
+// This will ensure the key is correct and rule out environment variable issues.
+const DHL_API_KEY = '36c7dae5-aa2c-43f8-9494-e1bc2fff8c8d'; 
 const DHL_API_ENDPOINT = 'https://wsbexpress.dhl.com/postalLocation/v1';
 
 export default async function handler(req, res) {
@@ -35,11 +36,12 @@ export default async function handler(req, res) {
     }
     
     if (!DHL_API_KEY) {
-        console.error('CRITICAL: DHL_VALIDATE_ADDRESS_API_KEY is not set!');
+        // This check is unlikely to fail now that it's hardcoded.
+        console.error('CRITICAL: DHL_API_KEY is not set!');
         return res.status(500).json({ error: 'Server configuration error: API Key is missing.' });
     }
     
-    console.log('Using DHL API Key (first 8 chars):', String(DHL_API_KEY).substring(0, 8));
+    console.log('Using HARDCODED DHL API Key (first 8 chars):', String(DHL_API_KEY).substring(0, 8));
 
     const { countryCode, postalCode, city, countyName } = req.query;
     console.log('Received query:', req.query); 
@@ -77,7 +79,6 @@ export default async function handler(req, res) {
         console.log('DHL API Response Body:', typeof responseData === 'string' ? responseData : JSON.stringify(responseData, null, 2));
 
         // ส่งต่อสถานะและข้อมูลจาก DHL กลับไปตรงๆ
-        // โดยตั้งค่า Header ใน Response ของ Vercel ก่อนส่ง
         res.status(apiResponse.status);
         if (typeof responseData === 'string') {
             res.send(responseData);
