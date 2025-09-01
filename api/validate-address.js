@@ -10,7 +10,6 @@ const ALLOWED_ORIGINS = [
 ];
 
 // --- Hardcode API Key for testing ---
-// This will ensure the key is correct and rule out environment variable issues.
 const DHL_API_KEY = '36c7dae5-aa2c-43f8-9494-e1bc2fff8c8d'; 
 const DHL_API_ENDPOINT = 'https://wsbexpress.dhl.com/postalLocation/v1';
 
@@ -23,7 +22,6 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // จัดการ Preflight Request (OPTIONS)
     if (req.method === 'OPTIONS') {
         console.log('Responding to OPTIONS preflight request.');
         return res.status(200).end();
@@ -33,12 +31,6 @@ export default async function handler(req, res) {
     if (req.method !== 'GET') {
         res.setHeader('Allow', ['GET']);
         return res.status(405).end(`Method ${req.method} Not Allowed`);
-    }
-    
-    if (!DHL_API_KEY) {
-        // This check is unlikely to fail now that it's hardcoded.
-        console.error('CRITICAL: DHL_API_KEY is not set!');
-        return res.status(500).json({ error: 'Server configuration error: API Key is missing.' });
     }
     
     console.log('Using HARDCODED DHL API Key (first 8 chars):', String(DHL_API_KEY).substring(0, 8));
@@ -64,9 +56,19 @@ export default async function handler(req, res) {
         const dhlApiUrl = `${DHL_API_ENDPOINT}?${params.toString()}`;
         console.log('Calling DHL API URL:', dhlApiUrl);
 
-        const apiResponse = await fetch(dhlApiUrl);
+        // --- START: Adding custom headers to the fetch call ---
+        const fetchOptions = {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Vercel-Serverless-Function/1.0 (node-fetch)' 
+                // We add a User-Agent to be more explicit.
+            }
+        };
+        // --- END: Adding custom headers to the fetch call ---
+
+        const apiResponse = await fetch(dhlApiUrl, fetchOptions);
         
-        // ตรวจสอบว่า Response จาก DHL เป็น JSON หรือไม่
         let responseData;
         const contentType = apiResponse.headers.get("content-type");
         if (contentType && contentType.indexOf("application/json") !== -1) {
@@ -78,7 +80,6 @@ export default async function handler(req, res) {
         console.log('DHL API Response Status:', apiResponse.status); 
         console.log('DHL API Response Body:', typeof responseData === 'string' ? responseData : JSON.stringify(responseData, null, 2));
 
-        // ส่งต่อสถานะและข้อมูลจาก DHL กลับไปตรงๆ
         res.status(apiResponse.status);
         if (typeof responseData === 'string') {
             res.send(responseData);
