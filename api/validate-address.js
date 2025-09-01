@@ -1,29 +1,20 @@
 // /api/validate-address.js
 import fetch from 'node-fetch';
 
-const ALLOWED_ORIGINS = [
-    'https://viruzjoke.github.io',
-    'thcfit.duckdns.org',
-    'thcfit-admin.duckdns.org',
-    'https://thcfit.vercel.app',
-    'https://thcfit-admin.vercel.app'
-];
-
 // --- Hardcode API Key for testing ---
 const DHL_API_KEY = '36c7dae5-aa2c-43f8-9494-e1bc2fff8c8d'; 
 const DHL_API_ENDPOINT = 'https://wsbexpress.dhl.com/postalLocation/v1';
 
 export default async function handler(req, res) {
-    // --- START: CORS Handling ---
-    const origin = req.headers.origin;
-    if (ALLOWED_ORIGINS.includes(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-    }
+    // --- START: CORS Handling for a single origin ---
+    // Allowing only the specific origin for the SBS project
+    res.setHeader('Access-Control-Allow-Origin', 'https://viruzjoke.github.io');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+    // Handle the preflight OPTIONS request
     if (req.method === 'OPTIONS') {
-        console.log('Responding to OPTIONS preflight request.');
+        console.log('Responding to OPTIONS preflight request from github.io.');
         return res.status(200).end();
     }
     // --- END: CORS Handling ---
@@ -56,16 +47,13 @@ export default async function handler(req, res) {
         const dhlApiUrl = `${DHL_API_ENDPOINT}?${params.toString()}`;
         console.log('Calling DHL API URL:', dhlApiUrl);
 
-        // --- START: Adding custom headers to the fetch call ---
         const fetchOptions = {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
                 'User-Agent': 'Vercel-Serverless-Function/1.0 (node-fetch)' 
-                // We add a User-Agent to be more explicit.
             }
         };
-        // --- END: Adding custom headers to the fetch call ---
 
         const apiResponse = await fetch(dhlApiUrl, fetchOptions);
         
