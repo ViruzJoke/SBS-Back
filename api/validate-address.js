@@ -5,9 +5,11 @@
 import fetch from 'node-fetch';
 
 const ALLOWED_ORIGINS = [
-    'https://viruzjoke.github.io',
-    'https://thcfit.vercel.app',
-    'https://thcfit-admin.vercel.app',
+    '[https://viruzjoke.github.io](https://viruzjoke.github.io)',
+    'thcfit.duckdns.org',
+    'thcfit-admin.duckdns.org',
+    '[https://thcfit.vercel.app](https://thcfit.vercel.app)',
+    '[https://thcfit-admin.vercel.app](https://thcfit-admin.vercel.app)'
 ];
 
 const DHL_API_KEY = process.env.DHL_VALIDATE_ADDRESS_API_KEY;
@@ -79,4 +81,5 @@ export default async function handler(req, res) {
         res.status(500).json({ error: 'An internal server error occurred.', details: error.message });
     }
 }
+
 
