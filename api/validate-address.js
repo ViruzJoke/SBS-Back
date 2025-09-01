@@ -13,7 +13,7 @@ const ALLOWED_ORIGINS = [
 ];
 
 // ดึงค่า API Key จาก Environment Variables แทนการ hardcode
-const DHL_API_KEY = process.env.DHL_VALIDATE_ADDRESS_API_KEY;
+const DHL_API_KEY = '36c7dae5-aa2c-43f8-9494-e1bc2fff8c8d';
 const DHL_API_ENDPOINT = 'https://wsbexpress.dhl.com/postalLocation/v1';
 
 export default async function handler(req, res) {
@@ -77,4 +77,5 @@ export default async function handler(req, res) {
         res.status(500).json({ error: 'An internal server error occurred.', details: error.message });
     }
 }
+
 
