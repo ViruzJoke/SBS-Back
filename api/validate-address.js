@@ -1,17 +1,18 @@
 // /api/validate-address.js
-// ฟังก์ชันนี้ทำหน้าที่เป็น Proxy ไปยัง DHL Postal Location API
-// โดยจะส่งต่อ request จาก frontend พร้อมกับเพิ่ม API key ที่จำเป็นจาก Environment Variables
+// This function acts as a proxy to the DHL Postal Location API.
+// It forwards requests from the frontend, adding the necessary API key from environment variables.
 
 import fetch from 'node-fetch';
 
 const ALLOWED_ORIGINS = [
-    '[https://viruzjoke.github.io](https://viruzjoke.github.io)',
+    'https://viruzjoke.github.io',
     'thcfit.duckdns.org',
     'thcfit-admin.duckdns.org',
-    '[https://thcfit.vercel.app](https://thcfit.vercel.app)',
-    '[https://thcfit-admin.vercel.app](https://thcfit-admin.vercel.app)'
+    'https://thcfit.vercel.app',
+    'https://thcfit-admin.vercel.app'
 ];
 
+// ดึงค่า API Key จาก Environment Variables แทนการ hardcode
 const DHL_API_KEY = process.env.DHL_VALIDATE_ADDRESS_API_KEY;
 const DHL_API_ENDPOINT = 'https://wsbexpress.dhl.com/postalLocation/v1';
 
@@ -32,10 +33,11 @@ export default async function handler(req, res) {
         res.setHeader('Allow', ['GET']);
         return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
-
+    
+    // ตรวจสอบว่า Key ถูกโหลดมาหรือไม่
     if (!DHL_API_KEY) {
         console.error('DHL_VALIDATE_ADDRESS_API_KEY is not set in environment variables.');
-        return res.status(500).json({ error: 'Server configuration error.' });
+        return res.status(500).json({ error: 'Server configuration error: API Key is missing.' });
     }
 
     const { countryCode, postalCode, city, countyName } = req.query;
@@ -54,15 +56,9 @@ export default async function handler(req, res) {
             countryCode,
         });
 
-        if (postalCode) {
-            params.append('postalCode', postalCode);
-        }
-        if (city) {
-            params.append('city', city);
-        }
-        if (countyName) {
-            params.append('countyName', countyName);
-        }
+        if (postalCode) params.append('postalCode', postalCode);
+        if (city) params.append('city', city);
+        if (countyName) params.append('countyName', countyName);
 
         const dhlApiUrl = `${DHL_API_ENDPOINT}?${params.toString()}`;
 
@@ -81,5 +77,4 @@ export default async function handler(req, res) {
         res.status(500).json({ error: 'An internal server error occurred.', details: error.message });
     }
 }
-
 
