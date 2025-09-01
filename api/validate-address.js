@@ -5,25 +5,35 @@ import fetch from 'node-fetch';
 const DHL_API_KEY = '36c7dae5-aa2c-43f8-9494-e1bc2fff8c8d'; 
 const DHL_API_ENDPOINT = 'https://wsbexpress.dhl.com/postalLocation/v1';
 
+// --- List of allowed origins ---
+const ALLOWED_ORIGINS = [
+    'https://viruzjoke.github.io',
+    'null' // Allow requests from local files (file://) for testing
+];
+
 export default async function handler(req, res) {
-    // --- START: CORS Handling for a single origin ---
-    // Allowing only the specific origin for the SBS project
-    res.setHeader('Access-Control-Allow-Origin', 'https://viruzjoke.github.io');
+    // --- START: Dynamic CORS Handling ---
+    const origin = req.headers.origin;
+    if (ALLOWED_ORIGINS.includes(origin) || origin === undefined) { // origin can be undefined for local files in some cases
+        res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    }
+    
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With'); // Add common headers
 
     // Handle the preflight OPTIONS request
     if (req.method === 'OPTIONS') {
-        console.log('Responding to OPTIONS preflight request from github.io.');
+        console.log(`Responding to OPTIONS request from origin: ${origin}`);
         return res.status(200).end();
     }
-    // --- END: CORS Handling ---
+    // --- END: Dynamic CORS Handling ---
 
     if (req.method !== 'GET') {
         res.setHeader('Allow', ['GET']);
         return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
     
+    console.log(`Handling GET request from origin: ${origin}`);
     console.log('Using HARDCODED DHL API Key (first 8 chars):', String(DHL_API_KEY).substring(0, 8));
 
     const { countryCode, postalCode, city, countyName } = req.query;
@@ -33,13 +43,8 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'countryCode is a required parameter.' });
     }
 
-    if (!postalCode && !city && !countyName) {
-        return res.status(400).json({ error: 'At least one of postalCode, city, or countyName is required.' });
-    }
-
     try {
         const params = new URLSearchParams({ key: DHL_API_KEY, countryCode });
-
         if (postalCode) params.append('postalCode', postalCode);
         if (city) params.append('city', city);
         if (countyName) params.append('countyName', countyName);
@@ -47,11 +52,12 @@ export default async function handler(req, res) {
         const dhlApiUrl = `${DHL_API_ENDPOINT}?${params.toString()}`;
         console.log('Calling DHL API URL:', dhlApiUrl);
 
+        // Mimic browser headers more closely
         const fetchOptions = {
             method: 'GET',
             headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'Vercel-Serverless-Function/1.0 (node-fetch)' 
+                'Accept': 'application/json, text/plain, */*',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
             }
         };
 
@@ -68,12 +74,7 @@ export default async function handler(req, res) {
         console.log('DHL API Response Status:', apiResponse.status); 
         console.log('DHL API Response Body:', typeof responseData === 'string' ? responseData : JSON.stringify(responseData, null, 2));
 
-        res.status(apiResponse.status);
-        if (typeof responseData === 'string') {
-            res.send(responseData);
-        } else {
-            res.json(responseData);
-        }
+        res.status(apiResponse.status).json(responseData);
 
     } catch (error) {
         console.error('Internal Server Error:', error);
