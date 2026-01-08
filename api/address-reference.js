@@ -15,11 +15,9 @@ const ALLOWED_ORIGINS = [
 // ฟังก์ชันหลักของ API endpoint
 export default async function handler(req, res) {
     // --- START: การตั้งค่า CORS Headers ---
-    const origin = req.headers.origin;
-    if (ALLOWED_ORIGINS.includes(origin) || !origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin || '*');
-    }
-    
+    // Permissive CORS to fix blocking issues
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -34,7 +32,7 @@ export default async function handler(req, res) {
         res.setHeader('Allow', ['GET']);
         return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
-    
+
     // --- START: ดึงค่า Environment Variables ---
     const username = process.env.DHL_USERNAME;
     const password = process.env.DHL_PASSWORD;
@@ -63,8 +61,8 @@ export default async function handler(req, res) {
         // ยิง request ไปยัง DHL API
         const apiResponse = await fetch(dhlApiUrl, {
             method: 'GET',
-            headers: { 
-                'Authorization': auth 
+            headers: {
+                'Authorization': auth
             }
         });
 
